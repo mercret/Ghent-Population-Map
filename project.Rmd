@@ -1,0 +1,73 @@
+---
+title: "2010 Population of Ghent, Belgium"
+author: "Mathias Mathieu"
+date: "14/06/2017"
+output: html_document
+---
+
+In this interactive map the 2010 population of the different neighbourhoods in the city of Ghent, Belgium, is shown. You can hover over a neighbourhood to get more details.
+
+```{r map,echo=FALSE,message=FALSE,warning=FALSE,error=FALSE}
+library(leaflet)
+library(rgdal)
+
+#download the data files if they don't exist
+if(!file.exists("population.csv")){
+    download.file(url="https://datatank.stad.gent/4/bevolking/totaalaantalinwoners.csv",destfile="population.csv",method="auto")
+}
+
+if(!file.exists("neighbourhoods.kml")){
+    download.file(url="https://datatank.stad.gent/4/grondgebied/wijken.kml",destfile="neighbourhoods.kml",method="auto")
+}
+
+#load the data frame containing population data
+ghent.pop <- read.csv("population.csv",sep=";",header = TRUE)
+
+#load the kml file containing the shapes of neighbourhoods
+kml <- readOGR("neighbourhoods.kml",verbose = FALSE)
+
+#extract the names of the neighbourhoods from res
+data <- kml@data
+neighbourhoods <- regmatches(data$Description,regexpr("<th>WIJK</th> <td>[ a-zA-Z-]*</td>",data$Description))
+neighbourhoods <- gsub("<th>WIJK</th> <td>([ a-zA-Z-]*)</td>","\\1",neighbourhoods)
+neighbourhoods <- gsub("  "," ",neighbourhoods)
+
+#reorder the population data frame so it's in the same order as kml
+ghent.pop <- ghent.pop[match(neighbourhoods,ghent.pop$wijk),]
+
+#generate labels
+labels <- sprintf(
+    "<strong>Neighbourhood: %s</strong><br/>Population: %g",
+    ghent.pop$wijk,ghent.pop$year_2010 
+) %>% lapply(htmltools::HTML)
+
+#generate colour palette
+bins <- seq(from=0,to=21000,by=3500)
+palette <- colorBin("Blues",domain=ghent.pop$year_2010,bins=bins)
+
+#generate leaflet map
+leaflet(kml,width="100%",height=600) %>%
+    addTiles() %>%
+    setView(lat=51.10,lng=3.75,zoom=11) %>%
+    addPolygons(
+        fillColor = ~palette(ghent.pop$year_2010),
+        weight = 2,
+        opacity = 1,
+        color = "blue",
+        dashArray = "3",
+        fillOpacity = 0.7,
+        highlight = highlightOptions(
+            weight = 5,
+            color = "#666",
+            dashArray = "",
+            fillOpacity = 0.7,
+            bringToFront = TRUE),
+        label=labels,
+        labelOptions = labelOptions(
+            style = list("font-weight" = "normal", padding = "3px 8px"),
+            textsize = "15px",
+            direction = "auto")) %>%
+    addLegend(pal = palette, values = bins, opacity = 0.7, title = "Population of Ghent",
+              position = "topright")
+
+```
